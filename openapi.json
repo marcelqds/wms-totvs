@@ -1,0 +1,3024 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Integrações ERP CORE",
+    "description": "# Descrição\nUtilizando a atual arquitetura desenvolvida para gerenciar a integração dos ERPs TOTVS com o WMS SaaS, a integração CORE foi desenvolvida para facilitar a integração entre os sistemas fora do ecossistema TOTVS com WMS SaaS.\n\nSua estrutura contém as principais funções necessárias para integrar com o WMS SaaS, com uma  arquitetura desenvolvida para não somente conectar, mas apoiar na gestão do processo entre os dois sistemas.\n\n**Os DE X PARA entre os sistemas**, são registrados no CORE mitigando a quantidade de desenvolvimentos nas integrações e nos sistemas que serão integrados. Assim como parametrizar as unidades do WMS, tipos de estoque e características em parametrizações embedadas no próprio WMS SaaS.\n\nOutra característica importante do processo, é o **processo de cadastro automático via contexto** de informações no WMS. O cadastro via contexto, valida as informações do produto, transportadora e fornecedor, que são obrigatórios no WMS para integração do documento e se necessário realiza o cadastro no WMS. Este processo é importante, pois evita a necessidade de realizar integrações de cadastros entre os dois sistemas.\n\nDe forma resumida o processo core, consome de forma ativa (GET) as APIs REST dos ERPs, disponibilizadas (publicadas) no layout estipulado no Swagger da integração CORE. Esse consumo, gera a fila de execução com o WMS SaaS, apresentando os registros de documentos integrados no monitor de integração do WMS SaaS, assim permitindo o acompanhamento dos processos e gerenciamento das informações.\n\nAs operações WMS SaaS que precisam ser integradas com o ERP, a integração realiza a captura destes dados e executa o retorno do processo executando (POST) nas APIs REST do ERP.\n\nA camada CORE de integração, além gerenciar e suavizar os processo de integração, centraliza as informações entre os sistemas que estão sendo integrados, pois utilizando os GETs com ERP, centraliza os registros da integrações e execuções, assim como possíveis erros e monitoramento da disponibilidade do ambiente Rest do cliente.\nEmbedado no WMS, existe o monitor de integração, que permite acompanhar os documentos integrados permitindo a rastreabilidade das integrações. Este monitor além de visualizar e quantificar os documentos, permite avaliar as possíveis divergências de informações, retornos das APIs, reprocessar integrações e acompanhar o status do ambiente REST. \n\nCaso as APIs executadas, tanto do ERP como WMS SaaS, apresentem alguma situação que impeça a execução, esta informação é apresentada de forma destacada. Permitindo a análise e se necessário, executar novamente a transação.\n\nAs situações divergentes de cadastros, saldos, etc, são nomeadas de erros de negócio. Situações técnicas como queda dos serviços Rest, internet, etc, são nomeadas como erros técnicos.\n\nOs principais processo integrados disponíveis com o WMS e a integração CORE, são:\n* [Recebimento](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Recebimento): Integração das notas fiscais de entrada, para realizar o processo de recebimento, conferência e armazenamento.\n* [Pedidos](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda): Integração de pedidos para separação, conferência e packing.\n* [Estoque](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Estoque): Inventário (WMS p/ ERP), Entrada/saída Simplificada (WMS p/ ERP)\n* [Manufatura](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Manufatura) Matéria primas: requisição e devolução\n* [Manufatura](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Manufatura) entrada de produto acabado.\n\n# Parâmetros iniciais \n\nNo WMS, no acesso ao monitor Integração, existe o botão configuração onde será necessário cadastrar:\n\n**Organização**: neste cadastro deve ser informado qual o estabelecimento ou filial relacionada ao ERP, para que sempre que executado um GET no filtro seja repassada esta informação para que o sistema consiga relacionar a Unidade de negócio do WMS, com o estabelecimento/Filial do ERP.\n\nO conceito de Estabelecimento/Filial, pode ser considerado a unidade fiscal da empresa.\n\n\n**Tipo de estoque**: O WMS permite relacionar o saldo do produto a um tipo de estoque, que sendo um tributo do saldo, engloba qualquer produto, endereço, lote, etc…Conceitualmente, este tipo de estoque, deve refletir o saldo do depósito/armazém no ERP.\nEx: Supondo que o saldo do ERP esteja no depósito EXP este saldo deve estar no WMS com o Tipo de estoque EXP, assim como por exemplo o saldo em um depósito/armazém ou status CQ, no WMS este deve estar relacionado ao tipo de estoque CQ.\n\nOs nomes entre os depósito/armazém e os tipos de estoques não precisam ser iguais, mas o cadastro deve estar relacionado.\nEste cadastro permite que o saldo de determinado depósito/armazém, seja no recebimento ou na integração, respeite as informações originadas no ERP. EX: Supondo que uma nota fiscal de entrada esteja tenha a sequência 01 com o produto para o depósito/armazém EXP e a sequência 02 esteja para o depósito/armazém CQ. A configuração interpreta esta informação e busca no DE X PARA cadastrado na configuração esta informação, registrando na nota fiscal esta informação, pois o WMS com esta informação registrada respeita os processos direcionados ao tipo de estoque. \n\nPara o processo de expedição também ocorre o mesmo processo. Ex: Supondo que o pedido esteja com a sequência 01 com o produto para o depósito/armazém VEN e a sequência 02 esteja para o depósito/armazém EXP. A integração deve preencher no campo tipo de estoque a informação relacionada, para que o WMS somente atenda com os saldos para cada tipo de estoque informado.\n\n**Autenticação**: As integrações ocorrem em chamadas REST, assim o AUTHORIZATION: basic_auth  HTTP: basic_auth HTTP Authorization Scheme: basic O Ambiente onde a integração CORE deverá chamar as APIs, o tipo deve ser o *basic_auth* que corresponde no envio das informações necessárias para o login no ERP que será integrado. Muito importante este usuário e senha estar cadastrado como NÃO EXPIRA a senha. As informações de usuário e senha, deve ser incluída no cadastro disponível na configuração do ERP, conforme mencionado no tópico de parametrizações.\n\n**Endereço de execução**: No documento, serão definidas as localizações e caminhos para os endereços das APIs. è muito importante seguir este padrão para que as chamadas consigam interagir com as APIs.\nEx: a API REST que será realizado o GET Buscar a lista de documentos de recebimento, deve estar no caminho [/wms/api/v1/documentos](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Recebimento/operation/get-recebimentos).",
+    "version": "2.0"
+  },
+  "paths": {
+    "/wms/api/v1/documentos": {
+      "get": {
+        "tags": [
+          "Recebimento"
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista dos documentos de entrada retornados com sucesso.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timeStamp": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "formula": {
+                            "type": "string",
+                            "description": "Se documento é formulário próprio ou não.",
+                            "x-example": "S",
+                            "enum": [
+                              "N",
+                              "S"
+                            ]
+                          },
+                          "fornecedorId": {
+                            "type": "string",
+                            "description": "Código do fornecedor do documento de recebimento",
+                            "x-example": "000124"
+                          },
+                          "loja": {
+                            "type": "string",
+                            "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+                            "x-example": "01"
+                          },
+                          "dataEmissao": {
+                            "type": "string",
+                            "description": "Data de emissão do documento de recebimento no formato YYYYMMDD",
+                            "x-example": "20230819"
+                          },
+                          "chaveNfe": {
+                            "type": "string",
+                            "description": "Chave do documento de recebimento no formato",
+                            "x-example": "97832324884110843794348226124645123456789013"
+                          },
+                          "serie": {
+                            "type": "string",
+                            "description": "Serie do documento de recebimento no formato",
+                            "x-example": "112"
+                          },
+                          "documento": {
+                            "type": "string",
+                            "description": "Número do documento de recebimento no formato",
+                            "x-example": "000182958"
+                          },
+                          "dadosExternos": {
+                            "$ref": "#/components/schemas/DadosExternos"
+                          }
+                        },
+                        "required": [
+                          "timeStamp",
+                          "loja",
+                          "formula",
+                          "fornecedorId",
+                          "dataEmissao",
+                          "serie",
+                          "documento"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar a lista de documentos de recebimento",
+        "description": "O GET Buscar a lista de documentos de recebimento, realiza a busca dos documentos que foram disponibilizadas para integração, gerando uma fila de demandas que devem ser integradas.\nO CORE está parametrizado para executar em frações de tempo o GET, a qual deve retornar os documentos disponíveis para integração no formato definido no swagger. Esta etapa é denominada pré-fila e registra somente o cabeçalho das notas fiscais, buscando somente as notas today -1.\nÉ importante a API somente disponibilizar os documentos que não serão alterados quando liberados para integração, para evitar divergência de informações entre os sistemas.\n\nDica: Utilize os campo “dadosexternos” para guardar a sua chave ou ID do seu documento. A integração CORE, mesmo usando as chaves do WMS, recebe e devolve estas informações em todas as transações, para que seja possível na api do ERP usar a chave usual, mitigando as adaptações de desenvolvimentos.",
+        "operationId": "get-recebimentos",
+        "parameters": [
+          {
+            "name": "stamp",
+            "in": "query",
+            "required": false,
+            "description": "Campo date referente a disponibilização do documento para integração.",
+            "example": "20230819",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filial",
+            "in": "query",
+            "required": false,
+            "description": "Filial a ser consultada.",
+            "example": "01",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/documento": {
+      "get": {
+        "tags": [
+          "Recebimento"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso no retorno dos dados completos do documento.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timeStamp": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "formula": {
+                      "type": "string",
+                      "description": "Se documento é formulário próprio ou não.",
+                      "x-example": "S",
+                      "enum": [
+                        "N",
+                        "S"
+                      ]
+                    },
+                    "fornecedorId": {
+                      "type": "string",
+                      "description": "Código do fornecedor do documento de recebimento",
+                      "x-example": "000124"
+                    },
+                    "loja": {
+                      "type": "string",
+                      "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+                      "x-example": "01"
+                    },
+                    "dataEmissao": {
+                      "type": "string",
+                      "description": "Data de emissão do documento de recebimento no formato YYYYMMDD",
+                      "x-example": "20230819"
+                    },
+                    "fornecedorDados": {
+                      "$ref": "#/components/schemas/FornecedorDados"
+                    },
+                    "transportadorDados": {
+                      "$ref": "#/components/schemas/TransportadorDados"
+                    },
+                    "itens": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "skus": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/ListaSkus"
+                            }
+                          },
+                          "produtoId": {
+                            "$ref": "#/components/schemas/Produto"
+                          },
+                          "quantidade": {
+                            "type": "number",
+                            "description": "Quantidade do produto",
+                            "x-example": 10.9
+                          },
+                          "tipoEstoque": {
+                            "$ref": "#/components/schemas/TipoEstoque"
+                          },
+                          "caracteristicasEstoque": {
+                            "$ref": "#/components/schemas/CaracteristicasEstoque"
+                          },
+                          "valorTotal": {
+                            "type": "number",
+                            "description": "Valor total do produto",
+                            "x-example": 1287.15
+                          },
+                          "valorUnitario": {
+                            "type": "number",
+                            "description": "Valor total do produto",
+                            "x-example": 118.08
+                          },
+                          "unidadeMedida": {
+                            "type": "string",
+                            "description": "Unidade de medida do produto",
+                            "x-example": "CX"
+                          },
+                          "sequencia": {
+                            "type": "string",
+                            "description": "Sequencia do item no documento",
+                            "x-example": "01"
+                          },
+                          "categoria": {
+                            "type": "string",
+                            "description": "Categoria do Produto",
+                            "x-example": 118.08
+                          },
+                          "descricao": {
+                            "type": "string",
+                            "description": "Descrição do produto",
+                            "x-example": "Caixa de sapato amarela"
+                          }
+                        },
+                        "required": [
+                          "produtoId",
+                          "quantidade",
+                          "tipoEstoque",
+                          "caracteristicasEstoque",
+                          "valorTotal",
+                          "valorUnitario",
+                          "unidadeMedida",
+                          "sequencia",
+                          "categoria",
+                          "descricao"
+                        ]
+                      }
+                    },
+                    "chaveNfe": {
+                      "type": "string",
+                      "description": "Chave do documento de recebimento",
+                      "x-example": "97832324884110843794348226124645123456789013"
+                    },
+                    "serie": {
+                      "type": "string",
+                      "description": "Serie do documento de recebimento",
+                      "x-example": "112"
+                    },
+                    "documento": {
+                      "type": "string",
+                      "description": "Número do documento de recebimento",
+                      "x-example": "000182958"
+                    },
+                    "dadosExternos": {
+                      "$ref": "#/components/schemas/DadosExternos"
+                    }
+                  },
+                  "required": [
+                    "timeStamp",
+                    "loja",
+                    "formula",
+                    "fornecedorId",
+                    "dataEmissao",
+                    "itens",
+                    "serie",
+                    "documento",
+                    "fornecedorDados"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Documento não encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "x-example": "Documento não encontrado na filial"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar documento de recebimento completo",
+        "description": "Os documentos recebidos pelo [Buscar a lista de documentos de recebimento](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Recebimento/operation/get-recebimentos) geram uma fila de execução onde Buscar a lista de documentos de recebimento COMPLETO é executado para buscar o documento por completo. O documento considerado completo, é composto pelo Cabeçalho + itens/sequências do documento. Este processo executa a geração de documento no WMS, onde se casos o WMS retorne algum erro, este registro é apresentado no Monitor de integração, embedado no WMS.",
+        "operationId": "get-recebimento-completo",
+        "parameters": [
+          {
+            "name": "documento",
+            "in": "query",
+            "required": false,
+            "description": "Número do documento de recebimento",
+            "example": "000182958",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serie",
+            "in": "query",
+            "required": false,
+            "description": "Serie do documento de recebimento",
+            "example": "112",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fornecedorId",
+            "in": "query",
+            "required": false,
+            "description": "Fornecedor do documento de recebimento",
+            "example": "000123",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dadosExternos",
+            "in": "query",
+            "description": "Informação inerente ao processo, será trafegada nos retornos para o documento",
+            "example": "{ \"idRetornoErp\": \"12315-sv21\", \"venda\": \"false\" }",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/documento/{filial}/status": {
+      "put": {
+        "tags": [
+          "Recebimento"
+        ],
+        "responses": {
+          "200": {
+            "description": "Atualizar o status do documento de entrada no ERP para Integrado com o WMS Saas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Documento não encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Atualizar documento de entrada para integrado",
+        "operationId": "status-docto-entrada",
+        "description": "Quando efetuado com sucesso o processo de geração do documento no WMS, o sistema CORE executa o POST Atualizar documento de entrada para integrado, para que no sistema de origem da informação, possa acompanhar os status dos processos. Este registro que o documento foi integrado, é importante estar na tabela onde são gravados os documentos disponíveis para integração, pois quando executado o GET de para buscar os documentos para integrar(Buscar a lista de documentos de recebimento), este documento não poderá estar disponibilizado para integrar.",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Dexiar valor vazio caso não possuir.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de recebimento",
+            "example": "01",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chaveRecebimento": {
+                    "type": "object",
+                    "properties": {
+                      "documento": {
+                        "type": "string",
+                        "description": "Número do documento de recebimento",
+                        "x-example": "000123987"
+                      },
+                      "serie": {
+                        "type": "string",
+                        "description": "Série do documento de recebimento",
+                        "x-example": "000123987"
+                      },
+                      "fornecedorId": {
+                        "type": "string",
+                        "description": "Fornecedor do documento de recebimento",
+                        "x-example": "000123"
+                      },
+                      "fornecedorLoja": {
+                        "type": "string",
+                        "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+                        "x-example": "01"
+                      },
+                      "dadosExternos": {
+                        "$ref": "#/components/schemas/DadosExternos"
+                      }
+                    },
+                    "description": "chaveRecebimento"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/documento/{filial}/cancelamento": {
+      "post": {
+        "tags": [
+          "Recebimento"
+        ],
+        "responses": {
+          "200": {
+            "description": "Documento de entrada cancelado com sucesso no ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falha ao tentar cancelar o documento de recebimento no ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Cancelar/Inativar documento de entrada",
+        "operationId": "cancelar-docto-entrada",
+        "description": "Este processo, permite informar o ERP que o documento de recebimento no WMS, foi inativado. Este procedimento normalmente é utilizado para que sejam realizadas alterações no documento no sistema do cliente e reintegrado o documento com o WMS, pois o WMS não permite integrar documentos com a mesma chave (documento + série + fornecedor) e também não permite eliminar do documento no WMS. A única maneira de reintegrar um documento com o WMS é inativar um registro para que possa ser reintegrado.",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de recebimento",
+            "example": "01",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/cancelar-docto-entradaBody"
+        }
+      }
+    },
+    "/wms/api/v1/conferencia/{filial}/entrada": {
+      "put": {
+        "tags": [
+          "Recebimento"
+        ],
+        "responses": {
+          "200": {
+            "description": "Conferência realizada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falha na operação de conferência no ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalizar conferência do documento de entrada",
+        "description": "No fluxo padrão, esta é a ultima etapa, pois uma vez o documento no WMS, segue as rotinas do WMS, sendo que no último processo, denominado Finalização da conferência, ao monitoramento ativo das transações realizada pelo CORE na nuvem do WMS SaaS, busca as informações do documento e produtos (quantidades, características, etc) para realizar o POST na API Finalizar conferência do documento de entrada para que seja possível atualizar as informações da nota fiscal. Este processo é importante para que caso exista alguma divergência entre o fiscal e físico, o sistema do cliente possa realizar as consistências.",
+        "operationId": "finalizar-conf-docto-entrada",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de recebimento",
+            "example": "01",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "chaveRecebimento": {
+                    "type": "object",
+                    "properties": {
+                      "documento": {
+                        "type": "string",
+                        "description": "Número do documento de recebimento",
+                        "x-example": "000123987"
+                      },
+                      "serie": {
+                        "type": "string",
+                        "description": "Série do documento de recebimento",
+                        "x-example": "01"
+                      },
+                      "fornecedorId": {
+                        "type": "string",
+                        "description": "Fornecedor do documento de recebimento",
+                        "x-example": "000123"
+                      },
+                      "fornecedorLoja": {
+                        "type": "string",
+                        "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+                        "x-example": "01"
+                      },
+                      "dadosExternos": {
+                        "$ref": "#/components/schemas/DadosExternos"
+                      }
+                    },
+                    "description": "chaveRecebimento"
+                  },
+                  "item": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "codigo": {
+                          "type": "string",
+                          "description": "Código do produto conferido",
+                          "x-example": "P123512"
+                        },
+                        "armazem": {
+                          "type": "string",
+                          "description": "Armazém produto conferido",
+                          "x-example": "01"
+                        },
+                        "lote": {
+                          "type": "string",
+                          "description": "Lote do produto conferido",
+                          "x-example": "01"
+                        },
+                        "dataValidade": {
+                          "type": "string",
+                          "description": "Data de validade do produto conferido no formato YYYYMMDD",
+                          "x-example": "20230820"
+                        },
+                        "numeroSerie": {
+                          "type": "string",
+                          "description": "Número de série do produto conferido",
+                          "x-example": "712512312312"
+                        },
+                        "item": {
+                          "type": "number",
+                          "description": "Sequência do produto no documento",
+                          "x-example": 1
+                        },
+                        "quantidadeConferida": {
+                          "type": "number",
+                          "description": "Quantidade conferida do produto",
+                          "x-example": 123
+                        }
+                      }
+                    },
+                    "description": "item"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/conferencia/{filial}/entrada/reinicia": {
+      "put": {
+        "tags": [
+          "Recebimento"
+        ],
+        "responses": {
+          "200": {
+            "description": "Conferência reiniciada com sucesso.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Documento não encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reiniciar conferência do documento de entrada",
+        "description": "Este processo, permite informar o ERP que o processo de conferência de recebimento foi reaberto. Este controle é importante, pois no POST Finalizar conferência do documento de entrada, foi informado ao ERP que o processo de conferência foi finalizado e recebido e registrada as quantidades e outras informações dos produtos conferidos no documento de recebimento. Para que o processo de recebimento no ERP, não passe para a próxima etapa, sem a conferência encerrada no WMS, pois pode ser realizada uma nova conferência e as informações podem ser diferentes da atualização anterior",
+        "operationId": "reiniciar-conf-docto-entrada",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de recebimento",
+            "example": "01",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/cancelar-docto-entradaBody"
+        }
+      }
+    },
+    "/wms/api/v1/pedidos": {
+      "get": {
+        "tags": [
+          "Pedido Venda"
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista dos pedidos de venda retornados com sucesso.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timeStamp": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "numero": {
+                            "type": "string",
+                            "description": "Número do documento de expedição",
+                            "x-example": "987582"
+                          },
+                          "dtEmissao": {
+                            "type": "string",
+                            "description": "Data de emissão do documento de expedição no formato YYYYMMDD",
+                            "x-example": "20230820"
+                          },
+                          "nota": {
+                            "type": "string",
+                            "description": "Número da nota fiscal do documento de expedição",
+                            "x-example": "000987582"
+                          },
+                          "serie": {
+                            "type": "string",
+                            "description": "Série da nota fiscal do documento de expedição",
+                            "x-example": "001"
+                          },
+                          "filial": {
+                            "$ref": "#/components/schemas/Filial"
+                          },
+                          "dadosExternos": {
+                            "$ref": "#/components/schemas/DadosExternos"
+                          }
+                        },
+                        "required": [
+                          "timeStamp",
+                          "numero",
+                          "dtEmissao",
+                          "filial"
+                        ]
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean",
+                      "description": "Se existe próxima página",
+                      "x-example": true
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "hasNext"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar a lista de pedidos de venda",
+        "description": "O GET Buscar a lista de pedidos de venda, realiza a busca dos documentos que foram disponibilizadas para integração, gerando uma fila de demandas que devem ser integradas.O CORE está parametrizado para executar em frações de tempo o GET, a qual deve retornar os documentos disponíveis para integração no formato definido no swagger. Esta etapa é denominada pré-fila e registra somente o cabeçalho dos pedidos, buscando somente os pedidos, conforme horário do STAMP.\n\nÉ importante a API somente disponibilizar os documentos que não serão alterados quando liberados para integração, para evitar divergência de informações entre os sistemas.\n\nNo ERP, a confirmação da liberação para integração do documento, deve registrar o data TIME (Ex: 2023-08-19 11:10:12), o qual denominamos STAMP, que é uma das chaves do filtro.\n\nEsta informação é utilizada para que o CORE saiba qual o último horário para realizar nova busca (GET), por isso passamos no filtro e também é recebido no GET de [Buscar a lista de pedidos de venda](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/get-pedidos). Ex: no filtro GET o CORE passou 2023-08-19 11:10:12, assim devem ser enviados todos os documentos com time stamp >= que 2023-08-19 11:10:12. Supondo que na lista de documentos foi recebido o último registro recebido foi 2023-08-19 12:05:10, na próxima execução do GET, o filtro encaminhado será 2023-08-19 12:05:11.\n\nDica: Utilize os campo “dadosexternos” para guardar a sua chave ou ID do seu documento. A integração CORE, mesmo usando as chaves do WMS, recebe e devolve estas informações em todas as transações, para que seja possível na api do ERP usar a chave usual, mitigando as adaptações de desenvolvimentos.\n\nImportante: O WMS não permite ter mais de um pedido com a mesmas chave, assim pedidos parciais, que é quando um pedido do ERP é enviado mais de uma vez para atendimento, este deve ter um novo número no WMS ou um incremento no nome (ex: Pedido + 01, Pedido + 02, etc)",
+        "operationId": "get-pedidos",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "description": "Filtro no padrão odata para aquisição dos registros",
+            "example": "filial eq '05' and timestamp ge '2023-08-08'",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pagesize",
+            "in": "query",
+            "required": false,
+            "description": "Tamanho da paginação a ser consultada",
+            "example": 50,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da Página a ser consultada",
+            "example": 1,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "faturado",
+            "in": "query",
+            "required": false,
+            "description": "Se verdadeiro, retorna apenas itens faturados para atualização.",
+            "example": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/pedido": {
+      "get": {
+        "tags": [
+          "Pedido Venda"
+        ],
+        "responses": {
+          "200": {
+            "description": "default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timeStamp": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "numero": {
+                      "type": "string",
+                      "description": "Número do documento de expedição",
+                      "x-example": "987582"
+                    },
+                    "dtEmissao": {
+                      "type": "string",
+                      "description": "Data de emissão do documento de expedição no formato YYYYMMDD",
+                      "x-example": "20230820"
+                    },
+                    "nota": {
+                      "type": "string",
+                      "description": "Número da nota fiscal do documento de expedição",
+                      "x-example": "000987582"
+                    },
+                    "serie": {
+                      "type": "string",
+                      "description": "Série da nota fiscal do documento de expedição",
+                      "x-example": "001"
+                    },
+                    "filial": {
+                      "$ref": "#/components/schemas/Filial"
+                    },
+                    "dadosExternos": {
+                      "$ref": "#/components/schemas/DadosExternos"
+                    },
+                    "cliente": {
+                      "type": "string",
+                      "description": "Código do cliente.",
+                      "x-example": "P12351"
+                    },
+                    "loja": {
+                      "type": "string",
+                      "description": "Campo disponível para fazer chave com o campo cliente. Deixar valor vazio caso não for utilizável.",
+                      "x-example": "01"
+                    },
+                    "clienteDados": {
+                      "$ref": "#/components/schemas/ClienteDados"
+                    },
+                    "unidadeFederativa": {
+                      "$ref": "#/components/schemas/Estados"
+                    },
+                    "cep": {
+                      "type": "string",
+                      "description": "CEP do endereço de entrega",
+                      "x-example": "41705-280"
+                    },
+                    "bairro": {
+                      "type": "string",
+                      "description": "Bairro do endereço de entrega",
+                      "x-example": "Boca do Rio"
+                    },
+                    "endereco": {
+                      "type": "string",
+                      "description": "Endereço de entrega",
+                      "x-example": "Rua João da Veiga Murici"
+                    },
+                    "cidade": {
+                      "type": "string",
+                      "description": "Cidade do endereço de entrega",
+                      "x-example": "Salvador"
+                    },
+                    "carga": {
+                      "type": "string",
+                      "description": "Carga do pedido (Viagem)",
+                      "x-example": "000123"
+                    },
+                    "urgente": {
+                      "type": "boolean",
+                      "description": "Se pedido é urgente ou não",
+                      "x-example": false
+                    },
+                    "observacao": {
+                      "type": "string",
+                      "description": "Observação a ser adicionada ao pedido no WMS",
+                      "x-example": "Envio depende do pedido xpto"
+                    },
+                    "itens": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "skus": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/ListaSkus"
+                            }
+                          },
+                          "caracteristicasEstoque": {
+                            "$ref": "#/components/schemas/CaracteristicasEstoque"
+                          },
+                          "tipoEstoque": {
+                            "$ref": "#/components/schemas/TipoEstoque"
+                          },
+                          "produtoId": {
+                            "$ref": "#/components/schemas/Produto"
+                          },
+                          "quantidade": {
+                            "type": "number",
+                            "description": "Quantidade do produto",
+                            "x-example": 10.9
+                          },
+                          "valorTotal": {
+                            "type": "number",
+                            "description": "Valor total do produto",
+                            "x-example": 1287.15
+                          },
+                          "valorUnitario": {
+                            "type": "number",
+                            "description": "Valor total do produto",
+                            "x-example": 118.08
+                          },
+                          "unidadeMedida": {
+                            "type": "string",
+                            "description": "Unidade de medida do produto",
+                            "x-example": "CX"
+                          },
+                          "sequencia": {
+                            "type": "string",
+                            "description": "Sequencia do item no documento",
+                            "x-example": "01"
+                          },
+                          "categoria": {
+                            "type": "string",
+                            "description": "Categoria do Produto",
+                            "x-example": 118.08
+                          },
+                          "descricao": {
+                            "type": "string",
+                            "description": "Descrição do produto",
+                            "x-example": "Caixa de sapato amarela"
+                          }
+                        },
+                        "required": [
+                          "skus",
+                          "caracteristicasEstoque",
+                          "tipoEstoque",
+                          "valortotal",
+                          "produtoId",
+                          "quantidade",
+                          "valorUnitario",
+                          "sequencia",
+                          "descricao",
+                          "unidadeMedida"
+                        ]
+                      }
+                    },
+                    "dataEntrega": {
+                      "type": "string",
+                      "description": "Data de entrega no formato YYYYMMDD",
+                      "x-example": "20230923"
+                    },
+                    "transportadorId": {
+                      "type": "string",
+                      "description": "Código do transportador",
+                      "x-example": "T012351"
+                    },
+                    "transportadorDados": {
+                      "$ref": "#/components/schemas/TransportadorDados"
+                    }
+                  },
+                  "required": [
+                    "timeStamp",
+                    "unidadeFederativa",
+                    "loja",
+                    "cep",
+                    "cliente",
+                    "numero",
+                    "bairro",
+                    "itens",
+                    "endereco",
+                    "dtEmissao",
+                    "dataEntrega",
+                    "nota",
+                    "cidade",
+                    "serie",
+                    "filial",
+                    "clienteDados"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar pedido de venda completo",
+        "description": "Os documentos recebidos pelo [Buscar a lista de pedidos de venda](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/get-pedidos), gera uma fila de execução onde Buscar pedido de venda completo COMPLETO é executado para buscar o documento por completo. O documento considerado completo, é composto pelo Cabeçalho + itens/sequências do documento. Este processo executa a geração de documento no WMS, onde se casos o WMS retorne algum erro, este registro é apresentado no Monitor de integração, embedado no WMS.",
+        "operationId": "get-pedido-completo",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "description": "Filtro no padrão odata para aquisição do registro",
+            "example": "numero eq '596848' and filial eq '05'",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/pedido/{filial}/{numero}/empenho": {
+      "put": {
+        "tags": [
+          "Pedido Venda"
+        ],
+        "responses": {
+          "200": {
+            "description": "Separação de estoque finalizada com sucesso.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalização da separação de estoque",
+        "description": "No fluxo padrão, esta é a última etapa, pois uma vez o documento no WMS, segue as rotinas do WMS, sendo que no último processo, denominado Finalização documento pedido,o monitoramento ativo das transações realizada pelo CORE na nuvem do WMS SaaS, busca as informações do documento e produtos (quantidades, características, etc) para realizar o POST na API Finalização da separação de estoque para que seja possível atualizar as informações no pedido. Este processo é importante para sinalizar o final do fluxo com o WMS e também, se necessário, o ajuste do pedido/estoque para considerar as características de estoques recebidas (lote/data de validade, etc).",
+        "operationId": "finalizar-separacao-estoque",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de expedição separado",
+            "example": "05",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "numero",
+            "in": "path",
+            "required": true,
+            "description": "Número do documento de expedição separado",
+            "example": "596848",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quantidadeVolumes": {
+                    "type": "number",
+                    "description": "Quantidade de volumes separados para o documento",
+                    "x-example": 36
+                  },
+                  "dadosExternos": {
+                    "$ref": "#/components/schemas/DadosExternos"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "produtoId": {
+                          "$ref": "#/components/schemas/Produto"
+                        },
+                        "armazem": {
+                          "type": "string",
+                          "description": "Código do armazém em que o produto foi separado",
+                          "x-example": "VN"
+                        },
+                        "quantidade": {
+                          "type": "integer",
+                          "format": "int32",
+                          "description": "Quantidade separada do produto",
+                          "x-example": 123.11
+                        },
+                        "lote": {
+                          "type": "string",
+                          "description": "Lote do produto separado",
+                          "x-example": "LT10241"
+                        },
+                        "dataValidade": {
+                          "type": "string",
+                          "description": "Data de validade do produto separado",
+                          "x-example": 123.11
+                        }
+                      }
+                    },
+                    "description": "Itens separados para o documento"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/pedido/{filial}/{numero}/bloqueio": {
+      "put": {
+        "tags": [
+          "Pedido Venda"
+        ],
+        "responses": {
+          "200": {
+            "description": "Bloqueio efetuado com sucesso no ERP.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "updated",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Atualizar pedido de venda para integrado",
+        "description": "Efetuado com sucesso o processo de geração do documento no WMS, o sistema CORE executa o POST Atualizar pedido de venda para integrado, para que no sistema de origem da informação, possa acompanhar os status dos processos. Este registro que o documento foi integrado, é importante estar na tabela onde são gravados os documentos disponíveis para integração, pois quando executado o GET de para buscar os documentos para integrar(Buscar a lista de pedidos de venda), este documento não poderá estar disponibilizado para integrar.",
+        "operationId": "atualizar-pedido-venda-para-integrado",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de expedição separado",
+            "example": "05",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "numero",
+            "in": "path",
+            "required": true,
+            "description": "Número do documento de expedição separado",
+            "example": "596848",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/atualizar-pedido-venda-para-integradoBody"
+        }
+      }
+    },
+    "/wms/api/v1/pedido/{filial}/{numero}/desbloqueio": {
+      "put": {
+        "tags": [
+          "Pedido Venda"
+        ],
+        "responses": {
+          "200": {
+            "description": "Desbloqueio efetuado com sucesso no ERP.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "updated",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Cancelar pedido de venda",
+        "description": "Este processo, permite informar o ERP que o pedido no WMS, foi inativado. Este procedimento normalmente é utilizado para que sejam realizadas alterações no documento no sistema do cliente e reintegrado o documento com o WMS, pois o WMS não permite integrar documentos com a mesma chave (pedido+Cliente+data) e também não permite eliminar do documento no WMS. A única maneira de reintegrar um documento com o WMS é inativar um registro para que possa ser reintegrado.",
+        "operationId": "cancelar-pedido-venda",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de expedição separado",
+            "example": "05",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "numero",
+            "in": "path",
+            "required": true,
+            "description": "Número do documento de expedição separado",
+            "example": "596848",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/atualizar-pedido-venda-para-integradoBody"
+        }
+      }
+    },
+    "/wms/api/v1/pedido/{filial}/{numero}/estorno": {
+      "put": {
+        "tags": [
+          "Pedido Venda"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso na operação de estorno da liberação do pedido de venda",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falha no estorno da liberação do pedido de venda",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "detailedMessage": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Estornar liberacao pedido de venda",
+        "description": "Cancela a seleção de estoque do pedido de venda.",
+        "operationId": "estornar-liberacao-pedido-venda",
+        "parameters": [
+          {
+            "name": "filial",
+            "in": "path",
+            "required": true,
+            "description": "Filial do documento de expedição separado",
+            "example": "05",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "numero",
+            "in": "path",
+            "required": true,
+            "description": "Número do documento de expedição separado",
+            "example": "596848",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Não informar caso não possuir valor.",
+            "example": "01,02 (Grupo 01, Filial 02)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/atualizar-pedido-venda-para-integradoBody"
+        }
+      }
+    },
+    "/wms/api/v1/movimentacao": {
+      "post": {
+        "tags": [
+          "Estoque"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso na operação da movimentacao de estoque",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falha na operação de movimentação de estoque no ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errorCode": {
+                      "type": "integer"
+                    },
+                    "errorMessage": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "errorCode",
+                    "errorMessage"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalizar movimentação de Estoque",
+        "description": "A gestão de tipos de estoques, conceitualmente, deve refletir o saldo do depósito/armazém no ERP, assim as movimentações de troca de tipo de estoques realizados no próprio APP do WMS SaaS, devem refletir esta movimentação, para manter a relação entre os saldos.\n\nEsta API é executada do WMS para o ERP, passando os parâmetros necessários para a geração do movimento de estoques, onde normalmente é uma transferência entre estoques/depósitos ou até mesmo um status diferenciado.\n\nDica: No tópico parametrização>tipos de estoques, existem maiores definições conceituais e configurações necessárias para este processo.",
+        "operationId": "enviar-movimentacao-estoque",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Deixar valor vazio caso não possuir.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "retiradoDeAvaria": {
+                    "type": "boolean",
+                    "description": "retirado de avaria"
+                  },
+                  "avariado": {
+                    "type": "boolean",
+                    "description": "Avariado"
+                  },
+                  "codigo": {
+                    "type": "string",
+                    "description": "Código do produto"
+                  },
+                  "rastreioId": {
+                    "type": "string",
+                    "description": "Código único de rastreamento do movimento"
+                  },
+                  "armazemOrigem": {
+                    "type": "string",
+                    "description": "Armazém de origem"
+                  },
+                  "armazemDestino": {
+                    "type": "string",
+                    "description": "Armazém de destino"
+                  },
+                  "quantidade": {
+                    "type": "integer",
+                    "format": "int32",
+                    "description": "quantidade"
+                  },
+                  "lote": {
+                    "type": "string",
+                    "description": "lote"
+                  }
+                },
+                "description": "items"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/producao/requisicao": {
+      "get": {
+        "tags": [
+          "Manufatura"
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista dos documentos de requisição retornados com sucesso. Caso não encontre, retornar o items vazio [].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ordemproducao": {
+                            "type": "string"
+                          },
+                          "skus": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/ListaSkus"
+                            }
+                          },
+                          "caracteristicasEstoque": {
+                            "$ref": "#/components/schemas/CaracteristicasEstoque"
+                          },
+                          "tipoEstoque": {
+                            "$ref": "#/components/schemas/TipoEstoque"
+                          },
+                          "tipoproduto": {
+                            "type": "string"
+                          },
+                          "produto": {
+                            "type": "string"
+                          },
+                          "dtcriacao": {
+                            "type": "string"
+                          },
+                          "quantidade": {
+                            "type": "number"
+                          },
+                          "saldo": {
+                            "type": "number"
+                          },
+                          "grupo": {
+                            "type": "string"
+                          },
+                          "unidademedida": {
+                            "type": "string"
+                          },
+                          "sequencia": {
+                            "type": "string"
+                          },
+                          "categoria": {
+                            "type": "string"
+                          },
+                          "filial": {
+                            "type": "string"
+                          },
+                          "descricao": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "ordemproducao",
+                          "skus",
+                          "tipoEstoque",
+                          "tipoproduto",
+                          "produto",
+                          "dtcriacao",
+                          "quantidade",
+                          "saldo",
+                          "grupo",
+                          "unidademedida",
+                          "sequencia",
+                          "categoria",
+                          "filial",
+                          "descricao"
+                        ]
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "hasNext"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar lista de requisições e por requisição",
+        "description": "O GET Buscar lista de requisições e por requisição realiza a busca dos documentos que foram disponibilizados para integração, gerando uma fila de demandas que devem ser integradas. O CORE está parametrizado para executar em frações de tempo o GET, a qual deve retornar os documentos disponíveis para integração no formato definido no swagger. Esta etapa é denominada pré-fila e registra somente o cabeçalho dos pedidos, buscando somente os pedidos, conforme horário do STAMP.\n\nÉ importante a API somente disponibilizar os documentos que não serão alterados quando liberados para integração, para evitar divergência de informações entre os sistemas.\n\nNo ERP, a confirmação da liberação para integração do documento, deve registrar o data TIME (Ex: 2023-08-19 11:10:12), o qual denominamos STAMP, que é uma das chaves do filtro. Esta informação é utilizada para que o CORE saiba qual o último horário para realizar nova busca (GET), por isso passamos no filtro e também é recebido no GET de Buscar a lista de pedidos de venda. Ex: no filtro GET o CORE passou 2023-08-19 11:10:12, assim devem ser enviados todos os documentos com time stamp >= que 2023-08-19 11:10:12. Supondo que na lista de documentos foi recebido o último registro recebido foi 2023-08-19 12:05:10, na próxima execução do GET, o filtro encaminhado será 2023-08-19 12:05:11.\n\nDica: Utilize os campo “dadosexternos” para guardar a sua chave ou ID do seu documento. A integração CORE, mesmo usando as chaves do WMS, recebe e devolve estas informações em todas as transações, para que seja possível na api do ERP usar a chave usual, mitigando as adaptações de desenvolvimentos.",
+        "operationId": "get-requisicoes",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "description": "Exemplo (dtcriacao gt '20220614') para obter a lista ou (ordemproducao eq '11728701001' and produto eq '000000101940A') para buscar completo",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Exemplo '01,05' ou seja 'grupo,filial'",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Manufatura"
+        ],
+        "responses": {
+          "200": {
+            "description": "Retorno de sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "description": "Mensagem de sucesso",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalização da separação de requisição de produção",
+        "description": "O processo de finalização da separação de requisição é disparado do WMS Saas ao ERP depois da baixa de estoque do produto. ",
+        "operationId": "finalizar-requisicao-producao",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "example": "T1,D MG 01",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ordemProducao": {
+                    "type": "string",
+                    "description": "Código da ordem de produção"
+                  },
+                  "produtos": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sequencia": {
+                          "type": "string",
+                          "description": "Sequência do item na requisicao"
+                        },
+                        "codigo": {
+                          "type": "string",
+                          "description": "Código do produto separado"
+                        },
+                        "armazem": {
+                          "type": "string",
+                          "description": "Armazém do produto separado"
+                        },
+                        "quantidade": {
+                          "type": "integer",
+                          "format": "int32",
+                          "description": "Quantidade do produto separado"
+                        },
+                        "lote": {
+                          "type": "string",
+                          "description": "Lote do produto separado"
+                        },
+                        "dataValidade": {
+                          "type": "string",
+                          "description": "Data de validade do produto separado"
+                        }
+                      }
+                    },
+                    "description": "items"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/producao/devolucao": {
+      "get": {
+        "tags": [
+          "Manufatura"
+        ],
+        "responses": {
+          "200": {
+            "description": "default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "dtcriacao": {
+                                "type": "string"
+                              },
+                              "filial": {
+                                "type": "string"
+                              },
+                              "ordemproducao": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "dtcriacao",
+                              "filial",
+                              "ordemproducao"
+                            ]
+                          }
+                        },
+                        "hasNext": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "hasNext"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "body"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar lista dos documentos de devolução a serem integrados",
+        "description": "O GET Buscar lista dos documentos de devolução a serem integrados, realiza a busca dos documentos que foram disponibilizadas para integração, gerando uma fila de demandas que devem ser integradas.O CORE está parametrizado para executar em frações de tempo o GET, a qual deve retornar os documentos disponíveis para integração no formato definido no swagger. Esta etapa é denominada pré-fila e registra somente o cabeçalho das notas fiscais, buscando somente as notas disponibilizadas, conforme horário do STAMP.\n\nÉ importante a API somente disponibilizar os documentos que não serão alterados quando liberados para integração, para evitar divergência de informações entre os sistemas.\n\nDica: Utilize os campo “dadosexternos” para guardar a sua chave ou ID do seu documento. A integração CORE, mesmo usando as chaves do WMS, recebe e devolve estas informações em todas as transações, para que seja possível na api do ERP usar a chave usual, mitigando as adaptações de desenvolvimentos.\n\nA liberação para integração, deve registrar o data TIME (Ex: 2023-08-19 11:10:12), o qual denominamos STAMP, que é uma das chaves do filtro. Esta informação é utilizada para que o CORE saiba qual o ultimo horário para realizar nova busca (GET), por isso passamos no filtro e também é recebido no GET de Buscar a lista de documentos de recebimento. Ex: no filtro GET o CORE passou 2023-08-19 11:10:12, assim devem ser enviados todos os documentos com time stamp => que 2023-08-19 11:10:12. Supondo que na lista de documentos foi recebido o último registro recebido foi 2023-08-19 12:05:10, na próxima execução do GET, o filtro encaminhado será 2023-08-19 12:05:11.",
+        "operationId": "get-devolucoes",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "description": "Exemplo (dtcriacao ge '20220614') para obter a lista ou (ordemproducao eq '11728701001' and produto eq '000000101940A') para buscar completo",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Exemplo '01,05' ou seja 'grupo,filial'",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/producao/{ordemProducao}/devolucao": {
+      "get": {
+        "tags": [
+          "Manufatura"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso no retorno dos dados completos do documento de devolução.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dtcriacao": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "skus": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/ListaSkus"
+                            }
+                          },
+                          "caracteristicasEstoque": {
+                            "$ref": "#/components/schemas/CaracteristicasEstoque"
+                          },
+                          "tipoEstoque": {
+                            "$ref": "#/components/schemas/TipoEstoque"
+                          },
+                          "tipoproduto": {
+                            "type": "string"
+                          },
+                          "produtofilial": {
+                            "type": "string"
+                          },
+                          "produto": {
+                            "type": "string"
+                          },
+                          "quantidade": {
+                            "type": "integer"
+                          },
+                          "unidademedida": {
+                            "type": "string"
+                          },
+                          "sequencia": {
+                            "type": "string"
+                          },
+                          "categoria": {
+                            "type": "string"
+                          },
+                          "descricao": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "skus",
+                          "tipoEstoque",
+                          "tipoproduto",
+                          "produtofilial",
+                          "produto",
+                          "quantidade",
+                          "unidademedida",
+                          "sequencia",
+                          "categoria",
+                          "descricao"
+                        ]
+                      }
+                    },
+                    "filial": {
+                      "type": "string"
+                    },
+                    "ordemproducao": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dtcriacao",
+                    "items",
+                    "filial",
+                    "ordemproducao"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falha na busca dos dados completos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer"
+                    },
+                    "detailedMessage": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar dados completos do documento de Devolução",
+        "description": "Os documentos recebidos pelo Buscar lista dos documentos de devolução a serem integrados geram uma fila de execução onde Buscar dados COMPLETOS do documento de Devolução é executado para buscar o documento por completo. O documento considerado completo, é composto pelo Cabeçalho + itens/sequências do documento. Este processo executa a geração de documento no WMS, onde se casos o WMS retorne algum erro, este registro é apresentado no Monitor de integração, embedado no WMS.",
+        "operationId": "get-full-devolucoes",
+        "parameters": [
+          {
+            "name": "ordemProducao",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Exemplo '01,05' ou seja 'grupo,filial'",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/producao/producoes": {
+      "get": {
+        "tags": [
+          "Manufatura"
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista dos apontamentos de produção retornados com sucesso. Caso não encontre, retornar o items vazio [].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "descricao": {
+                            "type": "string"
+                          },
+                          "stamp": {
+                            "type": "string",
+                            "description": "Campo date-time referente a disponibilização do documento para integração Ex - 2022-09-08 14:33:10."
+                          },
+                          "documento": {
+                            "type": "string"
+                          },
+                          "skus": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/ListaSkus"
+                            }
+                          },
+                          "caracteristicasEstoque": {
+                            "$ref": "#/components/schemas/CaracteristicasEstoque"
+                          },
+                          "chave": {
+                            "type": "number"
+                          },
+                          "tipoEstoque": {
+                            "$ref": "#/components/schemas/TipoEstoque"
+                          },
+                          "ordemProducao": {
+                            "type": "string"
+                          },
+                          "produto": {
+                            "type": "string"
+                          },
+                          "quantidade": {
+                            "type": "number"
+                          },
+                          "tipo": {
+                            "type": "string"
+                          },
+                          "grupo": {
+                            "type": "string"
+                          },
+                          "categoria": {
+                            "type": "string"
+                          },
+                          "unidadeMedida": {
+                            "type": "string"
+                          },
+                          "dataEmissao": {
+                            "type": "string"
+                          },
+                          "tipoProduto": {
+                            "type": "string"
+                          },
+                          "filial": {
+                            "type": "string"
+                          },
+                          "origem": {
+                            "type": "string"
+                          },
+                          "dadosExternos": {
+                            "$ref": "#/components/schemas/DadosExternos"
+                          }
+                        },
+                        "required": [
+                          "descricao",
+                          "stamp",
+                          "documento",
+                          "caracteristicasEstoque",
+                          "chave",
+                          "ordemproducao",
+                          "skus",
+                          "tipoEstoque",
+                          "tipoproduto",
+                          "produto",
+                          "dtcriacao",
+                          "quantidade",
+                          "saldo",
+                          "grupo",
+                          "unidademedida",
+                          "sequencia",
+                          "categoria",
+                          "filial",
+                          "descricao,",
+                          "origem"
+                        ]
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "hasNext"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Buscar apontamentos de produção",
+        "description": "Retorna todas as informações de apontamentos de produção para integração com o WMS Saas.",
+        "operationId": "get-apontamentos-producao",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "description": "Exemplo (dataEmissao gt '20231015' and status eq ' ') para obter a lista de apontamentos",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Exemplo '01,05' ou seja 'grupo,filial'",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/wms/api/v1/producao/{producao}/integrado": {
+      "post": {
+        "tags": [
+          "Manufatura"
+        ],
+        "responses": {
+          "200": {
+            "description": "Atualizar o status da produção no ERP para Integrado com o WMS Saas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Produção não encontrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Atualizar status da produção para integrado",
+        "operationId": "status-producao",
+        "description": "Atualizar o status da produção no ERP para Integrado com o WMS Saas.",
+        "parameters": [
+          {
+            "name": "producao",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "description": "Agrupador de filiais. Dexiar valor vazio caso não possuir.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dadosExternos": {
+                    "$ref": "#/components/schemas/DadosExternos"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/inventario": {
+      "post": {
+        "tags": [
+          "Estoque"
+        ],
+        "responses": {
+          "200": {
+            "description": "Retorno de sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "description": "Mensagem de sucesso",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalização inventário",
+        "description": "O processo de inventário é integrado do WMS para o ERP, passando a posição de estoque inventariado, para que seja realizada no ERP as análises comparativas e ajustes necessários. \n\nNo WMS o inventário ocorre com as devidas contagens e ajustes de saldos por endereços, porém no ERP a posição de estoque é total e nem sempre os ajustes de saldos realizados nos endereços no WMS, deve refletir os ajustes de estoques no ERP. Assim, na finalização do inventário no WMS, a integração repassa a posição total do estoque inventariada, ou melhor, soma todos os itens e suas características dos endereços inventariados para gerar a informação que será integrada.\n\nDica de negócio: No ERP esta integração deve gerar o processo de inventário e as informações recebidas do WMS, devem ser consideradas as contagens deste inventário.",
+        "operationId": "atualizar-inventario",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "example": "T1,D MG 01",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codigoInventario": {
+                    "type": "string",
+                    "description": "codigoInventario"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dataInventario": {
+                          "type": "string",
+                          "description": "dataInventario"
+                        },
+                        "codigo": {
+                          "type": "string",
+                          "description": "codigo"
+                        },
+                        "armazem": {
+                          "type": "string",
+                          "description": "armazem"
+                        },
+                        "quantidade": {
+                          "type": "integer",
+                          "format": "int32",
+                          "description": "quantidade"
+                        },
+                        "lote": {
+                          "type": "string",
+                          "description": "lote"
+                        },
+                        "numeroSerie": {
+                          "type": "string",
+                          "description": "lote"
+                        }
+                      }
+                    },
+                    "description": "items"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/api/v1/movimentar": {
+      "post": {
+        "tags": [
+          "Estoque"
+        ],
+        "responses": {
+          "200": {
+            "description": "default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "description": "Mensagem de sucesso",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Erro na execução da API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultError"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalização movimento simplificado",
+        "description": "No APP do WMS, existe a rotina de entrada e saída simplificada, normalmente utilizada para pequenos ajustes de estoque no WMS. O POST Finalização movimento simplificado permite atualizar estas informações no ERP, para que seja possível creditar ou debitar o saldo.\n\nPara o ERP, sugerimos criar uma camada de validação, pois este POST sempre é realizado na finalização do processo e esta camada teria que validar se gera o movimento de estoque e qual o tipo ou dispensa o registro.",
+        "operationId": "enviar-movimento-manual",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "header",
+            "required": false,
+            "example": "T1,D MG 01",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "movimentos": {
+                    "type": "array",
+                    "description": "array dos movimentos",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "codigo",
+                        "tipo",
+                        "emissao",
+                        "armazem",
+                        "quantidade"
+                      ],
+                      "properties": {
+                        "codigo": {
+                          "type": "string",
+                          "description": "Codigo do produto"
+                        },
+                        "lote": {
+                          "type": "string",
+                          "description": "Lote movimentado"
+                        },
+                        "dataValidade": {
+                          "type": "string",
+                          "description": "Data de validade do lote"
+                        },
+                        "tipo": {
+                          "type": "string",
+                          "description": "ENTRADA ou SAIDA"
+                        },
+                        "emissao": {
+                          "type": "string",
+                          "description": "Data do movimento"
+                        },
+                        "observacao": {
+                          "type": "string",
+                          "description": "Observacao do movimento"
+                        },
+                        "armazem": {
+                          "type": "string",
+                          "description": "Armazem do movimento"
+                        },
+                        "quantidade": {
+                          "type": "integer",
+                          "format": "int32",
+                          "description": "Quantidade"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "basic_auth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Recebimento",
+      "description": "O processo de recebimento tem como objetivo integrar as notas fiscais de recebimento com o fluxo do WMS de gestão de documentos de recebimento.\n\nDica de negócio: Como as notas fiscais apresentam várias sequências e muitas vezes são necessários diferentes direcionamentos para estas sequências, uma sugestão e para definição de quais sequências serão integradas com o WMS, sejam por depósito ou armazém no ERP. Pois permite a flexibilidade do processo, pois permite,  por exemplo, destinar itens para outros processos que não precisam passar pelo WMS.\n\nA liberação para integração, deve registrar o data TIME (Ex: 2023-08-19 11:10:12), o qual denominamos STAMP, que uma das chaves do filtro.\n\nO processo está dividido em dois GETs para buscar os documentos:\n\n* O primeiro GET é Buscar a lista de documentos de recebimento que buscamos o cabeçalho dos documentos que pretendemos integrar e colocamos em uma fila de execução dentro do sistema de gestão de integrações. Caso ocorra alguma divergência de integração, esta informação é apresentada no monitor, permitindo o reprocessamento.\n\n* A fila gerada, executa o outro GET Buscar documento de recebimento completo, que busca o documento completo cabeçalho + itens, para assim executar as APIs do WMS para gerar os documentos. Caso ocorra alguma divergência de integração, esta informação é apresentada no monitor, permitindo o reprocessamento.\n\nEsta arquitetura permite “suavizar” o fluxo de informações e as execuções das APIs, assim como o tamanho dos arquivos trafegados, mitigando possíveis capacidades de execução.\n\nDica de negócio: É importante a API somente disponibilizar no GET os documentos que não serão alterados quando liberados para integração, para evitar divergência de informações entre os sistemas. Normalmente para o sistema do cliente pode ser um status diferente no documento, que pode ser atualizado por um operador ou um processo automatizado. Este status normalmente é chamado de “Liberado para integração”, assim evita que o documento seja integrado enquanto estiver sendo atualizado no sistema do cliente, evitando ir somente uma parte do documento, pois normalmente um documento de nota fiscal de entrada, podem conter várias sequências. O documento estando no status “Liberado para integração” deve estar bloqueado para alterações, para evitar divergências de informações entre os sistemas e é sugerido via processo de Cancelar/Inativar documento de entrada que volte ao status anterior ao “Liberado para integração”.\n\nEfetuado com sucesso o GET Buscar documento de recebimento completo e consequentemente o documento no WMS, a camada CORE retorna a mensagem de sucesso, via POST Atualizar documento de entrada para integrado para que no sistema de origem da informação, possa acompanhar os status dos processos. Este registro que o documento foi integrado, é importante estar na tabela onde são gravados os documentos disponíveis para integração, pois quando executado o GET de para buscar os documentos para integrar(Buscar a lista de documentos de recebimento), este documento não poderá estar disponibilizado para integrar. \n\nDica de negócio: Sugerimos neste POST atualizar o status do atual “Liberado para integração” para “integrado WMS”.\n\nUma vez no WMS, o documento segue as rotinas do WMS, sendo que no último processo, denominado Finalização da conferência, ao monitoramento ativo das transações realizada pelo CORE na nuvem do WMS SaaS, busca as informações do documento e produtos (quantidades, características, etc) para realizar o POST na API Finalizar conferência do documento de entrada para que seja possível atualizar as informações da nota fiscal. Este processo é importante para que caso exista alguma divergência entre o fiscal e físico, o sistema do cliente possa realizar as consistências.\n\nDica de negócio: Sugerimos neste POST atualizar o status do atual “Integrado” para “WMS Retornou SEM divergência” e caso exista divergência fique “WMS Retornou COM divergência”, para que o responsável pelo processo de recebimento possa realizar as ações pertinentes ao processo ou caso exista alguma automatizações, esta fique transparente para o operador.\n\nPara manter a integridade entre os sistemas, ainda temos disponíveis a API Cancelar/Inativar documento de entrada que permite o WMS informar o sistema do cliente que o processo de recebimento do documento foi cancelado. Este procedimento normalmente é utilizado para que sejam realizadas alterações no documento no sistema do cliente e reintegrado o documento com o WMS, pois o WMS não permite integrar documentos com a mesma chave (documento + série + fornecedor) e também não permite eliminar do documento no WMS. A única maneira de reintegrar um documento com o WMS é inativar um registro para que possa ser reintegrado.\n\nFluxo sugerido:\n* Gerar documento no ERP\n  - Status ERP “Não integrado”\n* Disponibilizar documento para integração.\n  - Alterar Status ERP “Liberado para integração”\n    - GET Buscar a lista de documentos de recebimento\n    - GET Buscar documento de recebimento completo\n* POST Atualizar documento de entrada para integrado\n  - Alterar Status para “Integrado”.\n* POST Finalização da conferência\n  - Documento está com divergência?\n    - SIM. Alterar status para “WMS Retornou COM divergência”\n    - NÃO. Alterar status para “WMS Retornou SEM divergência”"
+    },
+    {
+      "name": "Pedido Venda",
+      "description": "O processo de pedido tem como objetivo integrar os pedidos ou notas fiscais de saida do ERP com fluxo do WMS de gestão de documentos de pedidos.\n\nDica de negócio: Como os pedidos apresentam várias sequências e muitas vezes são necessários diferentes direcionamentos para estas sequências, uma sugestão e para definição de quais sequências serão integradas com o WMS, sejam por depósito ou armazém no ERP. Pois permite a flexibilidade do processo, pois permite,  por exemplo, destinar itens para outros processos que não precisam passar pelo WMS.\n\nNo ERP, a confirmação da liberação para integração do documento, deve registrar o data TIME (Ex: 2023-08-19 11:10:12), o qual denominamos STAMP, que é uma das chaves do filtro. Esta informação é utilizada para que o CORE saiba qual o último horário para realizar nova busca (GET), por isso passamos no filtro e também é recebido no GET de Buscar a lista de pedidos de venda. Ex: no filtro GET o CORE passou 2023-08-19 11:10:12, assim devem ser enviados todos os documentos com time stamp >= que 2023-08-19 11:10:12. Supondo que na lista de documentos foi recebido o último registro recebido foi 2023-08-19 12:05:10, na próxima execução do GET, o filtro encaminhado será 2023-08-19 12:05:11.\n\nO processo está dividido em dois GETs para buscar os documento:\n\n* O primeiro GET é [Buscar a lista de pedidos de venda](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/get-pedidos) que buscamos o cabeçalho dos documentos que pretendemos integrar e colocamos em uma fila de execução dentro do sistema de gestão de integrações. Caso ocorra alguma divergência de integração, esta informação é apresentada no monitor, permitindo o reprocessamento. * A fila gerada, executa o outro GET [Buscar pedido de venda completo](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/get-pedido), que busca o documento completo cabeçalho + itens, para assim executar as APIs do WMS para gerar os documentos. Caso ocorra alguma divergência de integração, esta informação é apresentada no monitor, permitindo o reprocessamento.\n\nEsta arquitetura permite “suavizar” o fluxo de informações e as execuções das APIs, assim como o tamanho dos arquivos trafegados, mitigando possíveis capacidades de execução.\n\nDica de negócio: É importante a API somente disponibilizar no GET os documentos que não serão alterados quando liberados para integração, para evitar divergência de informações entre os sistemas. Normalmente para o sistema do cliente, pode ser um status diferente no documento, que pode ser atualizado por um operador ou um processo automatizado. Este status normalmente é chamado de “Liberado para integração”, assim evita que o documento seja integrado enquanto estiver sendo atualizado no sistema do cliente, evitando ir somente uma parte do documento, pois normalmente um documento de nota fiscal de entrada, podem conter várias sequências. O documento estando no status “Liberado para integração” deve estar bloqueado para alterações, para evitar divergências de informações entre os sistemas e é sugerido via processo de Cancelar pedido de venda que volta ao status anterior ao “Liberado para integração”.\n\nEfetuado com sucesso o GET Buscar pedido de venda completo  e consequentemente o documento no WMS, a camada CORE retorna a mensagem de sucesso, via POST Atualizar pedido de venda para integrado para que no sistema de origem da informação, possa acompanhar os status dos processos. Este registro que o documento foi integrado, é importante estar na tabela onde são gravados os documentos disponíveis para integração, pois quando executado o GET de para buscar os documentos para integrar(Buscar a lista de documentos de pedido), este documento não poderá estar disponibilizado para integrar. \n\nDica de negócio: Sugerimos neste POST atualizar o status do atual “Liberado para integração” para “integrado WMS”. Outra questão importante, é a características de estoque (Lote, data de validade/ série), se no payload encaminhado, esta informação for informada, o WMS recebe esta informação e obrigatoriamente realiza a separação deste. CAso não seja informada, o WMS segue as rotinas dele para seleção de estoque (FIFO, FEFO, Shelf LIFE).\n\nUma vez no WMS, o documento segue as rotinas do WMS, sendo que no último processo, denominado baixa de estoque/finalização pedido, o monitoramento ativo das transações realizada pelo CORE na nuvem do WMS SaaS, busca as informações do documento e produtos (quantidades, características, etc) para realizar o POST na API Finalização da separação de estoque  para que seja possível atualizar as informações nos pedidos. Este processo é importante para atualizar as informações das características de estoque (Lote, data de validade/ série) separadas no WMS, para que sejam atualizadas no ERP.\n\nDica de negócio: Sugerimos neste POST atualizar o status do atual “Integrado” para “WMS Retornou” para que esteja disponível para faturar. Outro ponto importante é a possibilidade do WMS trabalhar com características e o ERP sem, neste caso a API esteja preparada para desconsiderar esta informação. Ainda neste contexto, se o cliente atua com características de estoque no WMS e no ERP é importante a API que recebe o POST, estar preparada para atualizar estas informações no pedido.\n\nPara manter a integridade entre os sistemas, ainda temos disponíveis a API Cancelar pedido de venda que permite o WMS informar o sistema do cliente que o processo de atendimento do pedido foi cancelado. Este procedimento normalmente é utilizado para que sejam realizadas alterações no documento no sistema do cliente e reintegrado o documento com o WMS, pois o WMS não permite integrar documentos com a mesma chave (pedido + cliente + data) e também não permite eliminar do documento no WMS. A única maneira de reintegrar um documento com o WMS é inativar um registro para que possa ser reintegrado.\n\nFluxo sugerido:\n* Gerar documento no ERP\n  * Status ERP “Não integrado”\n* Disponibilizar documento para integração. (neste momento deve ser gerado o registro do timestamp.\n  * Alterar Status ERP “Liberado para integração”\n    * GET [Buscar a lista de pedidos de venda](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/get-pedidos)\n    * GET [Buscar pedido de venda completo](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/get-pedido)\n* POST [Atualizar pedido de venda para integrado](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/atualizar-pedido-venda-para-integrado)\n  * Alterar Status para “Integrado”.\n* POST [Finalização da separação de estoque](https://swagger-integracao-core.azurewebsites.net/api/get-swagger#tag/Pedido-Venda/operation/finalizar-separacao-estoque)\n  * Necessário controlar características de estoque no ERP?\n    * SIM. Alterar pedido/estoque para considerar as características de estoques recebidas (lote/data de validade, etc)\n    * NÃO.\n  * Altera status para “retornou WMS”."
+    },
+    {
+      "name": "Estoque",
+      "description": "As integrações de estoques, são um conjunto de APIs que permite a conectar os fluxos de manutenção de saldos e fluxos de negócio entre o o WMS e o ERP.\n\n* Finalização inventário: integra os saldos inventariados no WMS com o ERP.\n* Finalização movimento simplificado: Integra as entradas e saídas e saídas de estoques simplificadas realizadas via APP do WMS com ERP TOTVS.\n\n* Finalizar movimentação de Estoque: Integra os movimentos de trocada de estoques e realizadas via APP do WMS com ERP TOTVS."
+    },
+    {
+      "name": "Manufatura",
+      "description": "O WMS atende os fluxos de manufatura para produtos acabados, nomeado de Entrada de produção e as requisições, que pode ser os atendimentos das matérias primas para o abastecimento da linha de produção assim como as devoluções que podemos ser considerados os retornos ou até mesmo sobras de matérias primas da linha de volta para o almoxarifado.\n\nO fluxo de requisição e retornos, podem ser também utilizados para movimentações de saídas e entradas internas no WMS, como por exemplo uma transferência entre depósitos, requisição de estoque, etc.\n\nPara gerar os processo de requisição e devolução, devem ser utilizadas as APIs:\n* Buscar lista de requisições e por requisição: Buscas os documentos com os itens necessários para realizar a requisição.\n\n* Buscar lista dos documentos de devolução a serem integrados e Buscar dados completos do documento de Devolução: O primeiro GET busca os documentos para integrar e o segundo busca o documento completo (utilizar como exemplo o processo de recebimento e pedidos).\n\n* Buscar apontamentos de produção e Atualizar status da produção para integrado: Buscas os documentos com os itens necessários para realizar a entrada de produção e confirmação para o ERP do fluxo realizado no WMS."
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:8085/rest"
+    },
+    {
+      "url": "https://localhost:8085/rest"
+    }
+  ],
+  "components": {
+    "requestBodies": {
+      "cancelar-docto-entradaBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "chaveRecebimento": {
+                  "type": "object",
+                  "properties": {
+                    "documento": {
+                      "type": "string",
+                      "description": "Número do documento de recebimento",
+                      "x-example": "000123987"
+                    },
+                    "serie": {
+                      "type": "string",
+                      "description": "Série do documento de recebimento",
+                      "x-example": "001"
+                    },
+                    "fornecedorId": {
+                      "type": "string",
+                      "description": "Fornecedor do documento de recebimento",
+                      "x-example": "000123"
+                    },
+                    "fornecedorLoja": {
+                      "type": "string",
+                      "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+                      "x-example": "01"
+                    },
+                    "dadosExternos": {
+                      "$ref": "#/components/schemas/DadosExternos"
+                    }
+                  },
+                  "description": "chaveRecebimento"
+                }
+              }
+            }
+          }
+        }
+      },
+      "atualizar-pedido-venda-para-integradoBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "filial": {
+                  "$ref": "#/components/schemas/Filial"
+                },
+                "numero": {
+                  "type": "string",
+                  "description": "Número do documento de expedição",
+                  "x-example": "987582"
+                },
+                "dadosExternos": {
+                  "$ref": "#/components/schemas/DadosExternos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "basic_auth": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    },
+    "schemas": {
+      "Produto": {
+        "type": "string",
+        "description": "Código do produto",
+        "x-example": "P12921"
+      },
+      "Filial": {
+        "type": "string",
+        "description": "Código da Filial",
+        "x-example": "0101"
+      },
+      "Timestamp": {
+        "type": "string",
+        "description": "Campo date-time referente a disponibilização do documento para integração.",
+        "x-example": "2023-08-19 11:10:12"
+      },
+      "Estados": {
+        "type": "string",
+        "description": "Estado",
+        "enum": [
+          "AC",
+          "AL",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          "MA",
+          "MT",
+          "MS",
+          "MG",
+          "PA",
+          "PB",
+          "PR",
+          "PE",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SC",
+          "SP",
+          "SE",
+          "TO",
+          "EX"
+        ]
+      },
+      "FornecedorDados": {
+        "type": "object",
+        "properties": {
+          "fornecedorId": {
+            "type": "string",
+            "description": "Código do fornecedor do documento de recebimento",
+            "x-example": "000124"
+          },
+          "documentoIdentificacao": {
+            "type": "string",
+            "description": "Documento do fornecedor do documento de recebimento",
+            "x-example": "16.174.808/0001-25"
+          },
+          "inscricaoEstadual": {
+            "type": "string",
+            "description": "Inscrição Estadual do fornecedor do documento de recebimento",
+            "x-example": "379.987.741.382"
+          },
+          "nome": {
+            "type": "string",
+            "description": "Nome do fornecedor do documento de recebimento",
+            "x-example": "Simone e Agatha Gráfica Ltda"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/Estados"
+          },
+          "fornecedorLoja": {
+            "type": "string",
+            "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+            "x-example": "01"
+          }
+        }
+      },
+      "TransportadorDados": {
+        "type": "object",
+        "properties": {
+          "transportadorId": {
+            "type": "string",
+            "description": "Código do transportador do documento",
+            "x-example": "125092"
+          },
+          "documentoIdentificacao": {
+            "type": "string",
+            "description": "Documento do Transportador do documento",
+            "x-example": "16.174.808/0001-25"
+          },
+          "inscricaoEstadual": {
+            "type": "string",
+            "description": "Inscrição Estadual do Transportador do documento",
+            "x-example": "872.792.959.337"
+          },
+          "nome": {
+            "type": "string",
+            "description": "Nome do Transportador",
+            "x-example": "Emilly e Felipe Transportes Ltda"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/Estados"
+          }
+        }
+      },
+      "ClienteDados": {
+        "type": "object",
+        "properties": {
+          "clienteId": {
+            "type": "string",
+            "description": "Código do cliente.",
+            "x-example": "C1232"
+          },
+          "documentoIdentificacao": {
+            "type": "string",
+            "description": "Documento do Cliente do documento",
+            "x-example": "260.971.350-92"
+          },
+          "inscricaoEstadual": {
+            "type": "string",
+            "description": "Inscrição Estadual do Cliente do documento",
+            "x-example": "872.792.959.337"
+          },
+          "nome": {
+            "type": "string",
+            "description": "Nome do Cliente",
+            "x-example": "João Pessoa da Silva"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/Estados"
+          },
+          "loja": {
+            "type": "string",
+            "description": "Campo disponível para fazer chave com o campo fornecedorId. Deixar valor vazio caso não for utilizável.",
+            "x-example": "01"
+          }
+        }
+      },
+      "DadosExternos": {
+        "type": "string",
+        "description": "Informação inerente ao processo, será trafegada nos retornos para o documento",
+        "x-example": "{ \"idRetornoErp\": \"12315-sv21\", \"venda\": \"false\" }"
+      },
+      "ListaTransferencias": {
+        "type": "object",
+        "required": [
+          "hasNext",
+          "items"
+        ],
+        "properties": {
+          "hasNext": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Transferencias"
+            }
+          }
+        }
+      },
+      "Transferencias": {
+        "type": "object",
+        "required": [
+          "filial",
+          "grupo",
+          "dataEmissao",
+          "ordemProducao",
+          "stamp",
+          "chave",
+          "documento",
+          "status",
+          "produto",
+          "quantidade",
+          "descricao",
+          "categoria",
+          "tipoProduto",
+          "unidadeMedida",
+          "tipoEstoque"
+        ],
+        "properties": {
+          "filial": {
+            "description": "Filial do sistema",
+            "type": "string"
+          },
+          "grupo": {
+            "description": "Grupo do sistema",
+            "type": "string"
+          },
+          "dataEmissao": {
+            "description": "Data do movimento",
+            "type": "string"
+          },
+          "ordemProducao": {
+            "description": "Numero da ordem de produção/documento",
+            "type": "string"
+          },
+          "stamp": {
+            "description": "Data e Hora do movimento no formato YYYY-MM-DD HH:MM:SSSS",
+            "type": "string"
+          },
+          "chave": {
+            "description": "Chave única para o movimento (usada no retorno)",
+            "type": "number"
+          },
+          "documento": {
+            "description": "Numero do documento agrupador",
+            "type": "string"
+          },
+          "status": {
+            "description": "Vazio = Não integrado / 1 = Integrado",
+            "type": "string"
+          },
+          "produto": {
+            "description": "Código do Produto",
+            "type": "string"
+          },
+          "quantidade": {
+            "description": "Quantidade do movimento",
+            "type": "number"
+          },
+          "descricao": {
+            "description": "Descrição do Produto",
+            "type": "string"
+          },
+          "categoria": {
+            "description": "Categoria do Produto",
+            "type": "string"
+          },
+          "tipoProduto": {
+            "description": "Tipo do Produto",
+            "type": "string"
+          },
+          "unidadeMedida": {
+            "description": "Unidade de medida do Produto",
+            "type": "string"
+          },
+          "skus": {
+            "description": "Skus do Produto",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListaSkus"
+            }
+          },
+          "caracteristicasEstoque": {
+            "$ref": "#/components/schemas/CaracteristicasEstoque"
+          },
+          "tipoEstoque": {
+            "$ref": "#/components/schemas/TipoEstoque"
+          }
+        }
+      },
+      "ListaSkus": {
+        "type": "object",
+        "required": [
+          "codigoBarras",
+          "descricao",
+          "quantidadeUnidadesProduto"
+        ],
+        "properties": {
+          "codigoBarras": {
+            "description": "Código de barras do SKU",
+            "type": "string",
+            "x-example": "789125387111747"
+          },
+          "descricao": {
+            "description": "Descrição do SKU",
+            "type": "string",
+            "x-example": "METROS"
+          },
+          "quantidadeUnidadesProduto": {
+            "description": "Quantidade do SKU",
+            "type": "number",
+            "x-example": 0.12
+          },
+          "peso": {
+            "description": "Peso do SKU",
+            "type": "number",
+            "x-example": 0.5
+          }
+        }
+      },
+      "CaracteristicasEstoque": {
+        "type": "object",
+        "description": "Caracteristicas do Produto",
+        "properties": {
+          "lote": {
+            "description": "Lote do Produto",
+            "type": "string",
+            "x-example": "L12SXZ"
+          },
+          "dataValidade": {
+            "description": "Data de validade do Produto no formato YYYYMMDD",
+            "type": "string",
+            "x-example": "20230819"
+          },
+          "numeroSerie": {
+            "description": "Número de série do Produto",
+            "type": "string",
+            "x-example": "987123651623641"
+          },
+          "documentoOrigem": {
+            "description": "Documento de origem do Produto",
+            "type": "string",
+            "x-example": "0001298745"
+          }
+        }
+      },
+      "TipoEstoque": {
+        "type": "object",
+        "description": "Tipo de estoque do movimento",
+        "required": [
+          "codigoArmazem",
+          "descricaoArmazem"
+        ],
+        "properties": {
+          "codigoArmazem": {
+            "description": "Código do Armazém",
+            "type": "string",
+            "x-example": "VN"
+          },
+          "descricaoArmazem": {
+            "description": "Descrição do Armazém",
+            "type": "string",
+            "x-example": "Vendas"
+          }
+        }
+      },
+      "DefaultError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "description": "Código do erro",
+            "type": "string",
+            "x-example": "400"
+          },
+          "message": {
+            "description": "Mensagem do erro",
+            "type": "string",
+            "x-example": "Erro de negócio"
+          },
+          "detailedMessage": {
+            "description": "Mensagem detalhada do erro",
+            "type": "string",
+            "x-example": "Saldo indisponível"
+          }
+        }
+      }
+    }
+  }
+}
